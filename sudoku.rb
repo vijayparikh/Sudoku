@@ -1,5 +1,6 @@
 require 'prawn'
-require 'json' # NEW: Added standard library for JSON parsing
+require 'json'
+require 'time' # For generating clean ISO 8601 timestamps
 
 class Sudoku
   DIFFICULTIES = {
@@ -9,21 +10,39 @@ class Sudoku
     expert: 55
   }.freeze
 
-  attr_accessor :board
+  attr_accessor :board, :metadata
 
   def initialize(board = Array.new(9) { Array.new(9, 0) })
     @board = board
+    @metadata = {
+      difficulty: "unknown",
+      created_at: Time.now.utc.iso8601,
+      status: "unsolved"
+    }
   end
 
-  # NEW: Exports any 9x9 board array into a formatted JSON file
-  def export_to_json(grid, filename = "sudoku.json")
+  # UPDATED: Exports the grid wrapped inside a rich metadata envelope
+  def export_to_json(grid, difficulty = "unknown", filename = "sudoku.json")
+    # Check if the board has empty spaces left to determine puzzle status
+    is_solved = !grid.flatten.include?(0)
+
+    payload = {
+      metadata: {
+        difficulty: difficulty.to_s,
+        created_at: Time.now.utc.iso8601,
+        status: is_solved ? "solved" : "puzzle",
+        dimensions: "9x9"
+      },
+      grid: grid
+    }
+
     File.open(filename, "w") do |f|
-      f.write(JSON.pretty_generate(grid))
+      f.write(JSON.pretty_generate(payload))
     end
-    puts "JSON successfully saved: #{filename}"
+    puts "JSON with metadata successfully saved: #{filename}"
   end
 
-  # NEW: Imports a board array from a JSON file and assigns it to the game board
+  # UPDATED: Imports the JSON package, parses metadata, and loads the grid
   def import_from_json(filename)
     unless File.exist?(filename)
       puts "Error: File #{filename} not found."
@@ -31,8 +50,17 @@ class Sudoku
     end
 
     file_content = File.read(filename)
-    @board = JSON.parse(file_content)
+    parsed_data = JSON.parse(file_content, symbolize_names: true)
+
+    # Extract metadata properties and the grid matrix
+    @metadata = parsed_data[:metadata]
+    @board = parsed_data[:grid]
+
     puts "JSON successfully imported from: #{filename}"
+    puts " -> Difficulty: #{@metadata[:difficulty]}"
+    puts " -> Created At: #{@metadata[:created_at]}"
+    puts " -> Board Type: #{@metadata[:status]}"
+
     @board
   end
 
@@ -59,9 +87,8 @@ class Sudoku
     full_board
   end
 
-  def generate_puzzle(difficulty = DIFFICULTIES[:medium])
-    #num_holes = DIFFICULTIES[difficulty.to_sym] || DIFFICULTIES[:medium]
-    num_holes = difficulty || DIFFICULTIES[:medium]
+  def generate_puzzle(difficulty = :medium)
+    num_holes = DIFFICULTIES[difficulty.to_sym] || DIFFICULTIES[:medium]
     solved = generate_full_board
     puzzle = solved.map(&:dup)
 
@@ -216,22 +243,20 @@ end
 # --- Usage Example ---
 
 sudoku = Sudoku.new
-chosen_difficulty =  Sudoku::DIFFICULTIES[:easy]
+chosen_difficulty = :hard
 
-# 1. Generate and save a puzzle state
+# 1. Generate and save a puzzle state along with metadata variables
 puts "=== 1. Generating Puzzle ==="
 generated_puzzle = sudoku.generate_puzzle(chosen_difficulty)
-sudoku.export_to_json(generated_puzzle, "my_puzzle.json")
-sudoku.export_to_pdf(generated_puzzle, "sudoku_puzzle.pdf", "Sudoku (#{chosen_difficulty.to_s.capitalize})")
+sudoku.export_to_json(generated_puzzle, chosen_difficulty, "metadata_puzzle.json")
 
-# 2. Reset our application and read it back from the file system
-puts "\n=== 2. Importing Saved Puzzle ==="
-another_sudoku_instance = Sudoku.new
-imported_puzzle = another_sudoku_instance.import_from_json("my_puzzle.json")
-another_sudoku_instance.print_board(imported_puzzle)
+# 2. Clear instance scope and read JSON from file system
+puts "\n=== 2. Importing Saved Puzzle with Metadata ==="
+fresh_instance = Sudoku.new
+imported_puzzle = fresh_instance.import_from_json("metadata_puzzle.json")
+fresh_instance.print_board(imported_puzzle)
 
-# 3. Solve the imported board configuration
-puts "\n=== 3. Solving Imported Puzzle ==="
-solved_board = another_sudoku_instance.solve(imported_puzzle)
-another_sudoku_instance.print_board(solved_board)
-another_sudoku_instance.export_to_pdf(solved_board, "sudoku_solution.pdf", "Sudoku Solution")
+# 3. Export a solved instance layout to show status updates
+puts "\n=== 3. Exporting Solved Data State ==="
+solved_board = fresh_instance.solve(imported_puzzle)
+fresh_instance.export_to_json(solved_board, chosen_difficulty, "metadata_solution.json")
