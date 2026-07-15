@@ -21,7 +21,6 @@ class Sudoku
     }
   end
 
-  # UPDATED: Exports the grid wrapped inside a rich metadata envelope
   def export_to_json(grid, difficulty = "unknown", filename = "sudoku.json")
     # Check if the board has empty spaces left to determine puzzle status
     is_solved = !grid.flatten.include?(0)
@@ -42,7 +41,6 @@ class Sudoku
     puts "JSON with metadata successfully saved: #{filename}"
   end
 
-  # UPDATED: Imports the JSON package, parses metadata, and loads the grid
   def import_from_json(filename)
     unless File.exist?(filename)
       puts "Error: File #{filename} not found."
@@ -249,6 +247,7 @@ chosen_difficulty = :hard
 puts "=== 1. Generating Puzzle ==="
 generated_puzzle = sudoku.generate_puzzle(chosen_difficulty)
 sudoku.export_to_json(generated_puzzle, chosen_difficulty, "metadata_puzzle.json")
+sudoku.export_to_pdf(generated_puzzle,"sudoku_puzzle.pdf")
 
 # 2. Clear instance scope and read JSON from file system
 puts "\n=== 2. Importing Saved Puzzle with Metadata ==="
@@ -260,3 +259,4 @@ fresh_instance.print_board(imported_puzzle)
 puts "\n=== 3. Exporting Solved Data State ==="
 solved_board = fresh_instance.solve(imported_puzzle)
 fresh_instance.export_to_json(solved_board, chosen_difficulty, "metadata_solution.json")
+fresh_instance.export_to_pdf(solved_board, "sudoku_solved_puzzle.pdf", "Sudoku Solved")
